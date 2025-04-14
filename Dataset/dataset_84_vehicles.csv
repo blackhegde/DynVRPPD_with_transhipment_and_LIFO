@@ -1,6 +1,0 @@
-vehicle_id,capacity,start_node,end_node,fixed_cost
-1,50,0,0,100
-2,50,0,0,100
-3,50,0,0,100
-4,50,0,0,100
-5,50,0,0,100
