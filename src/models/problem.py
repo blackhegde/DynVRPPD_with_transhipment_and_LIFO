@@ -1,20 +1,43 @@
 # Mô hình bài toán DPDP-TL
 # Định nghĩa các lớp và phương thức cần thiết cho bài toán DPDP-TL
-class DPDPTL:
-    def __init__(self, nodes, vehicles, time_matrix):
-        self.nodes = nodes          # Danh sách nodes
-        self.vehicles = vehicles    # Danh sách xe
-        self.time_matrix = time_matrix  # Ma trận thời gian
-        self.transshipments = [n for n in nodes if n.is_transshipment]
+from dataclasses import dataclass
+from typing import List, Dict, Tuple
+
+@dataclass
+class Node:
+    id: int
+    type: str  # 'pickup', 'delivery', 'transshipment'
+    x: float   # x coordinate
+    y: float   # y coordinate
+
+@dataclass
+class Order:
+    id: int
+    pickup_node: int
+    delivery_node: int
+    start_time: float
+    end_time: float
+    weight: float
+    items: List[Dict] 
+
+@dataclass
+class Vehicle:
+    id: int
+    capacity: float
+    current_load: float = 0
+    current_location: int = None  # node id
+    route: List[int] = None       # list of node ids
+    arrival_times: List[float] = None
+    departure_times: List[float] = None
     
-    def check_lifo(self, route):
-        """Kiểm tra ràng buộc LIFO"""
-        stack = []
-        for node in route:
-            if node.is_pickup:
-                stack.append(node)
-            else:
-                if not stack or stack.pop().paired_node != node.id:
-                    return False
-        return True
+class DPDPTL:
+    def __init__(self):
+        self.nodes: Dict[int, Node] = {}
+        self.orders: Dict[int, Order] = {}
+        self.vehicles: Dict[int, Vehicle] = {}
+        self.transshipment_nodes: List[int] = []
+        self.time_horizon: float = 24 * 60  
+        self.current_time: float = 0
+        self.distance_matrix: Dict[Tuple[int, int], float] = {}
+        self.travel_time_matrix: Dict[Tuple[int, int], float] = {}
    

@@ -1,8 +1,7 @@
-vehicle_id,capacity,lifo_capacity,start_node,end_node,fixed_cost
-1,50,30,0,0,200
-2,30,18,0,0,160
-3,70,42,0,0,240
-4,70,42,0,0,240
-5,70,42,0,0,240
-6,70,42,0,0,240
-7,70,42,0,0,240
+vehicle_id,capacity,lifo_capacity,start_node,end_node
+1,30,18,0,0
+2,30,18,0,0
+3,70,42,0,0
+4,30,18,0,0
+5,50,30,0,0
+6,50,30,0,0

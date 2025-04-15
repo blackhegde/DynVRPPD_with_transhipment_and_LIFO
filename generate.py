@@ -2,6 +2,8 @@ import numpy as np
 import pandas as pd
 import os
 from scipy.spatial.distance import cdist
+from typing import List, Dict
+from dataclasses import dataclass
 
 # Seed để đảm bảo reproducibility
 np.random.seed(42)
@@ -16,7 +18,7 @@ os.makedirs(output_dir_large, exist_ok=True)
 output_dir_small = "Dataset/small_scale"
 os.makedirs(output_dir_small, exist_ok=True)
 
-# ========================= CẤU HÌNH LỚP DATASET =========================
+# CẤU HÌNH LỚP DATASET
 class DPDPTL_Dataset:
     def __init__(self):
         self.speed = 60  # km/h
@@ -26,7 +28,7 @@ class DPDPTL_Dataset:
         self.transfer_capacity_range = (10, 30)  # Giới hạn hàng tại transshipment
 
     def generate(self, dataset_id, scale="smallscale"):
-        # --------------------- PHẦN 1: TẠO NODES ---------------------
+        #  TẠO NODES 
         if scale == "largescale":
             n_customers = np.random.randint(70, 100)  # Số lượng khách hàng lớn
             output_dir_scale = output_dir_large
@@ -48,7 +50,8 @@ class DPDPTL_Dataset:
         nodes = [{
             "node_id": 0, "x": coords[0][0], "y": coords[0][1],
             "demand": 0, "is_transshipment": 0, "is_depot": 1,
-            "ready_time": 0, "due_time": self.max_time, "service_time": 0
+            "ready_time": 0, "due_time": self.max_time, "service_time": 0,
+            "order_id": -1, "is_dynamic": 0, "dynamic_appear_time": -1
         }]
 
         # Transshipment nodes
@@ -58,24 +61,45 @@ class DPDPTL_Dataset:
                 "demand": 0, "is_transshipment": 1, "is_depot": 0,
                 "ready_time": 0, "due_time": self.max_time,
                 "service_time": np.random.randint(5, 15),  # Thời gian bốc/dỡ
+                "order_id": -1, "is_dynamic": 0, "dynamic_appear_time": -1,
                 "transfer_capacity": np.random.randint(*self.transfer_capacity_range)
             })
 
-        # Customer nodes (pickup/delivery)
-        for i in range(1 + n_transshipments, n_nodes):
-            demand = np.random.choice([-3, -2, -1, 1, 2, 3])  # Âm: pickup, Dương: delivery
-            ready_time = np.random.randint(0, self.max_time - 120)  # Đảm bảo có đủ time window
+        # Customer nodes (pickup/delivery)       
+        # Tạo danh sách các cặp pickup và delivery
+        pickup_indices = np.random.choice(range(1 + n_transshipments, n_nodes), size=(n_nodes - 1 - n_transshipments) // 2, replace=False)
+        delivery_indices = [i for i in range(1 + n_transshipments, n_nodes) if i not in pickup_indices]
+
+        # Tạo các cặp pickup và delivery với order_id
+        order_id = 1
+        for pickup, delivery in zip(pickup_indices, delivery_indices):
+            # Pickup node
+            ready_time = np.random.randint(0, self.max_time - 120)
+            demand = np.random.randint(-4, -1)  # Âm: pickup
             nodes.append({
-                "node_id": i, "x": coords[i][0], "y": coords[i][1],
+                "node_id": pickup, "x": coords[pickup][0], "y": coords[pickup][1],
                 "demand": demand, "is_transshipment": 0, "is_depot": 0,
                 "ready_time": ready_time,
                 "due_time": ready_time + np.random.randint(60, 180),
                 "service_time": np.random.randint(5, 20),
-                "is_dynamic": np.random.choice([0, 1], p=[0.7, 0.3]),  # 30% đơn động
-                "dynamic_appear_time": np.random.randint(30, self.max_time - 60) if np.random.rand() > 0.7 else -1
+                "order_id": order_id  # Gán order_id
             })
 
-        # --------------------- PHẦN 2: TẠO VEHICLES ---------------------
+            # Delivery node
+            ready_time = np.random.randint(0, self.max_time - 120)
+            nodes.append({
+                "node_id": delivery, "x": coords[delivery][0], "y": coords[delivery][1],
+                "demand": -demand,  # Dương: delivery
+                "is_transshipment": 0, "is_depot": 0,
+                "ready_time": ready_time,
+                "due_time": ready_time + np.random.randint(60, 180),
+                "service_time": np.random.randint(5, 20),
+                "order_id": order_id  # Gán order_id
+            })
+
+            order_id += 1  # Tăng order_id cho cặp tiếp theo
+
+        #  TẠO VEHICLES 
         n_vehicles = np.random.randint(self.min_vehicles, self.max_vehicles + 1)
         vehicles = []
         for vehicle_id in range(1, n_vehicles + 1):
@@ -86,10 +110,9 @@ class DPDPTL_Dataset:
                 "lifo_capacity": int(capacity * 0.6),  # 60% của tổng capacity
                 "start_node": 0,  # Xuất phát từ depot
                 "end_node": 0,    # Kết thúc tại depot
-                "fixed_cost": 100 + capacity * 2  # Chi phí cố định phụ thuộc capacity
             })
 
-        # --------------------- PHẦN 3: LƯU DỮ LIỆU ---------------------
+        #  LƯU DỮ LIỆU 
         # Lưu nodes
         df_nodes = pd.DataFrame(nodes)
         df_nodes.to_csv(f"{output_dir_scale}/dataset_{dataset_id}_nodes.csv", index=False)
@@ -104,12 +127,12 @@ class DPDPTL_Dataset:
         df_vehicles = pd.DataFrame(vehicles)
         df_vehicles.to_csv(f"{output_dir_scale}/dataset_{dataset_id}_vehicles.csv", index=False)
 
-        # Lưu orders (tách từ nodes)
-        df_orders = df_nodes[(df_nodes["demand"] != 0)].copy()
-        df_orders["order_id"] = range(1, len(df_orders) + 1)
-        df_orders.to_csv(f"{output_dir_scale}/dataset_{dataset_id}_orders.csv", index=False)
+        # # Lưu orders (tách từ nodes)
+        # df_orders = df_nodes[(df_nodes["demand"] != 0)].copy()
+        # df_orders["order_id"] = range(1, len(df_orders) + 1)
+        # df_orders.to_csv(f"{output_dir_scale}/dataset_{dataset_id}_orders.csv", index=False)
 
-# ========================= SINH DATASET =========================
+#  SINH DATASET 
 if __name__ == "__main__":
     generator = DPDPTL_Dataset()
     for dataset_id in range(1, 100):  # Sinh 100 dataset nhỏ
